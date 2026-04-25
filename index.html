@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Voxel playground</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+    <link rel="stylesheet" href="./main.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+</head>
+
+<body>
+
+    <div id="left">
+        <!-- <div id="panel-header">
+            <div class="dot" style="background:#f87171"></div>
+            <div class="dot" style="background:#fbbf24"></div>
+            <div class="dot" style="background:#4ade80"></div>
+            <span id="panel-title">Voxel playground</span>
+        </div> -->
+
+        <div class="fn-sig">
+            <span class="kw">function</span> <span class="fn">voxel</span>(<span class="par">x, y, z</span>) {
+        </div>
+
+        <div id="palette">
+            <div id="palette-label">named colors — click to paste</div>
+            <div id="palette-list"></div>
+        </div>
+
+        <div id="examples">
+            <div id="examples-label">examples</div>
+            <div id="examples-list">
+                <button class="ex-btn"
+                    data-code="return z === 0 ? RED : z === 1 ? GREEN : z === 2 ? BLUE : null;">layers</button>
+                <button class="ex-btn" data-code="return Math.sqrt(x*x+y*y+z*z) <= 3 ? CYAN : null;">sphere</button>
+                <button class="ex-btn"
+                    data-code="const r = Math.sqrt(x*x+y*y+z*z); &#10; return r <= 3 ? (r <= 1 ? WHITE : r <= 2 ? YELLOW : RED) : null;">ring</button>
+                <button class="ex-btn"
+                    data-code="if (x === 0 && z === 0) return GREEN; &#10; if (y === 0 && x === 0) return BLUE; &#10; return null;">the
+                    cross</button>
+                <button class="ex-btn" data-code="return (x+y+z) % 2 === 0 ? WHITE : BLACK;">chess</button>
+                <button class="ex-btn"
+                    data-code="return Math.max(Math.abs(x),Math.abs(y),Math.abs(z)) === 3 ? ORANGE : null;">shell</button>
+                <button class="ex-btn"
+                    data-code="const d = Math.abs(x)+Math.abs(y)+Math.abs(z); &#10; return d<=1?WHITE:d<=2?CYAN:d<=3?BLUE:null;">octahedron</button>
+            </div>
+        </div>
+
+        <div class="cm-wrap">
+            <textarea id="code">return z === 0 && y === 0 && x === 0 ? PINK : null;</textarea>
+        </div>
+
+        <div class="fn-sig" style="border-top:1px solid #131520; border-bottom:none;">}</div>
+
+        <div id="bottom-bar">
+            <button id="run-btn">▶ RUN <span class="shortcut">Ctrl+↵</span></button>
+            <div id="error-msg"></div>
+        </div>
+
+        <div id="axis-info">
+            <div class="ax">
+                <div class="ax-dot" style="background:#f87171"></div><span style="color:#f87171">X</span> → right
+            </div>
+            <div class="ax">
+                <div class="ax-dot" style="background:#4ade80"></div><span style="color:#4ade80">Y</span> → up
+            </div>
+            <div class="ax">
+                <div class="ax-dot" style="background:#60a5fa"></div><span style="color:#60a5fa">Z</span> → forward
+            </div>
+            <div class="ax" style="margin-left:auto; gap:8px;">
+                <span id="range-label">-3..3</span>
+                <input id="size-slider" type="range" min="3" max="15" step="2" value="7"
+                    style="width:80px; accent-color:#60a5fa; cursor:pointer;">
+                <span id="size-label" style="color:#60a5fa; min-width:16px;">7</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="resizer"></div>
+    <div id="right"></div>
+
+    <script type="module">
+        import * as THREE from "three";
+        import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+        import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+
+        const NAMED_COLORS = {
+            RED: "#ff4444",
+            GREEN: "#44ff88",
+            BLUE: "#4488ff",
+            YELLOW: "#ffdd44",
+            ORANGE: "#ff8833",
+            CYAN: "#44ffee",
+            MAGENTA: "#ff44cc",
+            WHITE: "#ffffff",
+            BLACK: "#222222",
+            PINK: "#ff88bb",
+            PURPLE: "#aa44ff",
+            LIME: "#aaff44",
+        };
+
+        const palList = document.getElementById("palette-list");
+        for (const [name, hex] of Object.entries(NAMED_COLORS)) {
+            const el = document.createElement("div");
+            el.className = "pal-item";
+            el.title = hex;
+            el.innerHTML = `<div class="pal-swatch" style="background:${hex}"></div>${name}`;
+            el.addEventListener("click", () => {
+                const cur = editor.getValue();
+                editor.replaceSelection(name);
+                editor.focus();
+            });
+            palList.appendChild(el);
+        }
+
+        const editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+            mode: "javascript",
+            theme: "dracula",
+            lineNumbers: true,
+            autoCloseBrackets: true,
+            matchBrackets: true,
+            indentUnit: 4,
+            tabSize: 4,
+            extraKeys: {
+                "Ctrl-Enter": () => run(),
+                "Cmd-Enter": () => run(),
+            }
+        });
+        editor.setSize("100%", "100%");
+
+        document.querySelectorAll(".ex-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                editor.setValue(btn.dataset.code.replace(/\\n/g, "\n"));
+                run();
+            });
+        });
+
+        const resizer = document.getElementById("resizer");
+        const left = document.getElementById("left");
+        let dragging = false;
+
+        resizer.addEventListener("mousedown", () => {
+            dragging = true;
+            document.body.style.cursor = "col-resize";
+            document.body.style.userSelect = "none";
+        });
+        window.addEventListener("mousemove", e => {
+            if (!dragging) return;
+            left.style.width = Math.min(Math.max(e.clientX, 240), window.innerWidth - 300) + "px";
+            onResize();
+        });
+        window.addEventListener("mouseup", () => {
+            dragging = false;
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+        });
+
+        const container = document.getElementById("right");
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0b0f);
+
+        const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 1000);
+        camera.position.set(11, -11, 9);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.target.set(0, 0, 0);
+        controls.minPolarAngle = 0;
+        controls.maxPolarAngle = Math.PI;
+        controls.minDistance = 2;
+        controls.maxDistance = 60;
+        controls.zoomSpeed = 1.5;
+        controls.rotateSpeed = 0.8;
+        controls.panSpeed = 0.8;
+        controls.mouseButtons = {
+            LEFT: THREE.MOUSE.ROTATE,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.PAN
+        };
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+        const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+        dir.position.set(6, -8, 10);
+        scene.add(dir);
+
+        function makeArrow(color, direction, label) {
+            const len = 4.8;
+            scene.add(new THREE.ArrowHelper(direction.normalize(), new THREE.Vector3(), len, color, 0.45, 0.28));
+            const c = document.createElement("canvas");
+            c.width = 64; c.height = 64;
+            const ctx = c.getContext("2d");
+            ctx.fillStyle = "#" + color.toString(16).padStart(6, "0");
+            ctx.font = "bold 38px monospace";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(label, 32, 32);
+            const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false }));
+            sp.scale.set(0.75, 0.75, 1);
+            sp.position.copy(direction.clone().normalize().multiplyScalar(len + 0.6));
+            scene.add(sp);
+        }
+
+        makeArrow(0xf87171, new THREE.Vector3(1, 0, 0), "X");
+        makeArrow(0x4ade80, new THREE.Vector3(0, 1, 0), "Y");
+        makeArrow(0x60a5fa, new THREE.Vector3(0, 0, 1), "Z");
+
+        scene.add(new THREE.GridHelper(7, 7, 0x1e2030, 0x161820));
+
+        let SIZE = 7;
+        let HALF = 3;
+        const geo = new RoundedBoxGeometry(0.92, 0.92, 0.92, 4, 0.08);
+        const matOff = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.04 });
+
+        const matCache = new Map();
+        function getMat(hex) {
+            if (matCache.has(hex)) return matCache.get(hex);
+            const m = new THREE.MeshStandardMaterial({ color: new THREE.Color(hex), roughness: 0.35, metalness: 0.2 });
+            matCache.set(hex, m);
+            return m;
+        }
+
+        let meshes = [];
+
+        function parseColor(val) {
+            if (val === null || val === undefined || val === false) return null;
+            if (val === true || val === 1) return "#6ea8ff";
+            if (typeof val === "string") return val;
+            if (typeof val === "number") return "#" + val.toString(16).padStart(6, "0");
+            return null;
+        }
+
+        function rebuild(fn) {
+            for (const m of meshes) scene.remove(m);
+            meshes = [];
+
+            for (let xi = 0; xi < SIZE; xi++) {
+                for (let yi = 0; yi < SIZE; yi++) {
+                    for (let zi = 0; zi < SIZE; zi++) {
+                        const x = xi - HALF;
+                        const y = yi - HALF;
+                        const z = zi - HALF;
+
+                        const raw = fn(x, y, z);
+                        const color = parseColor(raw);
+                        const mat = color ? getMat(color) : matOff;
+
+                        const m = new THREE.Mesh(geo, mat);
+                        m.position.set(x, y, z);
+                        scene.add(m);
+                        meshes.push(m);
+                    }
+                }
+            }
+        }
+
+        function run() {
+            const errEl = document.getElementById("error-msg");
+            try {
+                const colorDefs = Object.entries(NAMED_COLORS)
+                    .map(([k, v]) => `const ${k} = "${v}";`)
+                    .join("\n");
+
+                const fn = new Function("x", "y", "z", colorDefs + "\n" + editor.getValue());
+                rebuild(fn);
+                errEl.textContent = "";
+            } catch (e) {
+                errEl.textContent = "⚠ " + e.message;
+            }
+        }
+
+        document.getElementById("run-btn").onclick = run;
+
+        const sizeSlider = document.getElementById("size-slider");
+        sizeSlider.addEventListener("input", () => {
+            SIZE = parseInt(sizeSlider.value);
+            HALF = (SIZE - 1) / 2;
+            document.getElementById("size-label").textContent = SIZE;
+            document.getElementById("range-label").textContent = `-${HALF}..${HALF}`;
+            run();
+        });
+
+        run();
+        controls.update();
+
+        function onResize() {
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        }
+        onResize();
+        window.addEventListener("resize", onResize);
+
+        (function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        })();
+    </script>
+
+</body>
+
+</html>
