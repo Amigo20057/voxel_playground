@@ -142,6 +142,16 @@
                 "Cmd-Enter": () => run(),
             }
         });
+        const saved = localStorage.getItem("voxel_code");
+
+        if (saved) {
+            editor.setValue(saved);
+        }
+
+        editor.on("change", () => {
+            localStorage.setItem("voxel_code", editor.getValue());
+        });
+
         editor.setSize("100%", "100%");
 
         document.querySelectorAll(".ex-btn").forEach(btn => {
